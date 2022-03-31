@@ -1,6 +1,6 @@
 # ![Gitaly](https://gitlab.com/gitlab-org/gitaly/uploads/509123ed56bd51247996038c858db006/gitaly-wordmark-small.png)
 
-Forked form Gitlab [gitaly](https://gitlab.com/gitlab-org/gitaly)  
+# Forked form Gitlab [gitaly](https://gitlab.com/gitlab-org/gitaly)  
 
 --------------------------------------------
 
