@@ -14,7 +14,12 @@ func applyCreateDirectory(action git2go.CreateDirectory, repo *git.Repository, i
 	if err := validateFileDoesNotExist(index, action.Path); err != nil {
 		return err
 	} else if err := validateDirectoryDoesNotExist(index, action.Path); err != nil {
-		return err
+		// mode 1: keep old files or sub-directories
+		// return nil
+		// mode 2: remove old files and sub-directories
+		if err := index.RemoveDirectory(action.Path, 0); err != nil {
+			return err
+		}
 	}
 
 	emptyBlobOID, err := repo.CreateBlobFromBuffer([]byte{})

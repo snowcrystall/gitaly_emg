@@ -8,8 +8,29 @@ import (
 )
 
 func applyCreateFile(action git2go.CreateFile, index *git.Index) error {
-	if err := validateFileDoesNotExist(index, action.Path); err != nil {
+	if err := validateDirectoryDoesNotExist(index, action.Path); err != nil {
 		return err
+	}
+	if err := validateFileDoesNotExist(index, action.Path); err != nil {
+		entry, err := index.EntryByPath(action.Path, 0)
+		if err != nil {
+			if git.IsErrorCode(err, git.ErrNotFound) {
+				return git2go.FileNotFoundError(action.Path)
+			}
+
+			return err
+		}
+
+		oid, err := git.NewOid(action.OID)
+		if err != nil {
+			return err
+		}
+
+		return index.Add(&git.IndexEntry{
+			Path: action.Path,
+			Mode: entry.Mode,
+			Id:   oid,
+		})
 	}
 
 	oid, err := git.NewOid(action.OID)

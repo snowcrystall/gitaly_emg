@@ -197,7 +197,7 @@ run_go_tests = PATH='${SOURCE_DIR}/internal/testhelper/testdata/home/bin:${PATH}
 unexport GOROOT
 export GOBIN                      = ${BUILD_DIR}/bin
 export GOCACHE                   ?= ${BUILD_DIR}/cache
-export GOPROXY                   ?= https://proxy.golang.org
+export GOPROXY                   ?= https://goproxy.cn,direct
 export PATH                      := ${BUILD_DIR}/bin:${PATH}
 export PKG_CONFIG_PATH           := ${LIBGIT2_INSTALL_DIR}/lib/pkgconfig
 export GITALY_TESTING_GIT_BINARY ?= ${GIT_INSTALL_DIR}/bin/git
