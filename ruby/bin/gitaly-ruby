@@ -1,0 +1,160 @@
+#!/usr/bin/env ruby
+
+# Gitaly always spawns this executable with LANG=en_US.UTF-8. In case the
+# system doesn't have this local, Ruby will fall back to the C locale and as a
+# result use ASCII encoding. As this breaks reading external commands printing
+# non-ASCII characters, we need to force the external encoding to UTF-8 here.
+Encoding.default_external = Encoding::UTF_8
+
+require 'fileutils'
+
+require 'grpc'
+require 'gitlab-labkit'
+require 'rugged'
+
+require_relative '../lib/gitaly_server.rb'
+require_relative '../lib/gitaly_server/sentry_interceptor.rb'
+require_relative '../lib/gitaly_server/exception_sanitizer_interceptor.rb'
+require_relative '../lib/gitaly_server/rugged_interceptor.rb'
+
+SHUTDOWN_TIMEOUT = 600
+
+def main
+  abort "Usage: #{$0} PPID /path/to/socket" if ARGV.length != 2
+  ppid, socket_path = ARGV
+
+  ppid_i = ppid.to_i
+  abort "invalid PPID: #{ppid.inspect}" unless ppid_i > 0
+
+  FileUtils.rm_f(socket_path)
+  socket_dir = File.dirname(socket_path)
+  FileUtils.mkdir_p(socket_dir)
+  File.chmod(0700, socket_dir)
+
+  set_rugged_search_path
+  load_distributed_tracing
+
+  load_tracing
+
+  s = GRPC::RpcServer.new(
+    poll_period: SHUTDOWN_TIMEOUT,
+    interceptors: build_server_interceptor_chain
+  )
+  port = 'unix:' + socket_path
+  s.add_http2_port(port, :this_port_is_insecure)
+  GRPC.logger.info("... running insecurely on #{port}")
+
+  GRPC.logger.warn("Using gitaly-proto #{Gitaly::VERSION}")
+  GitalyServer.register_handlers(s)
+
+  signal_thread = Thread.new do
+    sleep
+  end
+
+  %w[TERM INT].each do |signal|
+    trap(signal) { signal_thread.kill }
+  end
+
+  start_parent_watcher(ppid_i, signal_thread)
+
+  run_thread = Thread.new do
+    s.run
+    signal_thread.kill
+  end
+
+  signal_thread.join
+  s.stop
+  run_thread.join
+end
+
+def set_rugged_search_path
+  search_path = Gitlab::Config::Git.new.rugged_git_config_search_path
+
+  return unless search_path
+
+  Rugged::Settings['search_path_system'] = search_path
+end
+
+def load_distributed_tracing
+  return unless Labkit::Tracing.enabled?
+
+  tracer = Labkit::Tracing::Factory.create_tracer("gitaly-ruby", Labkit::Tracing.connection_string)
+  OpenTracing.global_tracer = tracer if tracer
+end
+
+def load_tracing
+  config = Gitlab::Config::Gitaly.new
+
+  if config.rbtrace_enabled?
+    GRPC.logger.info("... loading rbtrace")
+    require 'rbtrace'
+  end
+
+  # rubocop:disable Style/GuardClause
+  if config.objspace_trace_enabled?
+    GRPC.logger.info("... loading ObjectSpace allocation tracking")
+    require 'objspace'
+    ObjectSpace.trace_object_allocations_start
+  end
+  # rubocop:enable Style/GuardClause
+end
+
+def start_parent_watcher(original_ppid, signal_thread)
+  Thread.new do
+    loop do
+      if Process.ppid != original_ppid
+        # Our original parent is gone. Self-terminate.
+        signal_thread.kill
+        break
+      end
+
+      sleep 1
+    end
+  end
+end
+
+def build_server_interceptor_chain
+  chain = []
+  chain << Labkit::Correlation::GRPC::ServerInterceptor.new
+
+  json_logger = build_json_logger
+  chain << json_logger if json_logger
+
+  chain << GitalyServer::SentryInterceptor.new
+  chain << Labkit::Tracing::GRPC::ServerInterceptor.new if Labkit::Tracing.enabled?
+  chain << GitalyServer::ExceptionSanitizerInterceptor.new
+  chain << GitalyServer::RuggedInterceptor.new
+
+  chain
+end
+
+def build_json_logger
+  output = File.open(json_log_file, 'a')
+  Labkit::Logging::GRPC::ServerInterceptor.new(output, { type: 'gitaly-ruby' })
+rescue IOError, Errno::EACCES => e
+  GRPC.logger.warn "Unable to write to log file: #{e}"
+  nil
+end
+
+def json_log_file
+  if Gitlab.config.logging.dir.present?
+    File.join(Gitlab.config.logging.dir, 'gitaly_ruby_json.log')
+  else
+    '/dev/null'
+  end
+end
+
+GRPC_LOGGER = Logger.new(STDOUT)
+GRPC_LOGGER.level = 'WARN'
+GRPC_LOGGER.progname = 'GRPC'
+GRPC_LOGGER.formatter = proc do |severity, _datetime, _progname, msg|
+  "GRPC-RUBY: #{severity}: #{msg}\n"
+end
+
+module GRPC
+  def self.logger
+    GRPC_LOGGER
+  end
+end
+
+main

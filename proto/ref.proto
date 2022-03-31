@@ -1,0 +1,453 @@
+syntax = "proto3";
+
+package gitaly;
+
+option go_package = "gitlab.com/gitlab-org/gitaly/v14/proto/go/gitalypb";
+
+import "lint.proto";
+import "shared.proto";
+import "blob.proto";
+import "google/protobuf/timestamp.proto";
+
+service RefService {
+  rpc FindDefaultBranchName(FindDefaultBranchNameRequest) returns (FindDefaultBranchNameResponse) {
+    option (op_type) = {
+      op: ACCESSOR
+    };
+  }
+  rpc FindAllBranchNames(FindAllBranchNamesRequest) returns (stream FindAllBranchNamesResponse) {
+    option (op_type) = {
+      op: ACCESSOR
+    };
+
+  }
+  rpc FindAllTagNames(FindAllTagNamesRequest) returns (stream FindAllTagNamesResponse) {
+    option (op_type) = {
+      op: ACCESSOR
+    };
+  }
+  // Find a Ref matching the given constraints. Response may be empty.
+  rpc FindRefName(FindRefNameRequest) returns (FindRefNameResponse) {
+    option (op_type) = {
+      op: ACCESSOR
+    };
+  }
+  // Return a stream so we can divide the response in chunks of branches
+  rpc FindLocalBranches(FindLocalBranchesRequest) returns (stream FindLocalBranchesResponse) {
+    option (op_type) = {
+      op: ACCESSOR
+    };
+  }
+  rpc FindAllBranches(FindAllBranchesRequest) returns (stream FindAllBranchesResponse) {
+    option (op_type) = {
+      op: ACCESSOR
+    };
+  }
+  // Returns a stream of tags repository has.
+  rpc FindAllTags(FindAllTagsRequest) returns (stream FindAllTagsResponse) {
+    option (op_type) = {
+      op: ACCESSOR
+    };
+  }
+  rpc FindTag(FindTagRequest) returns (FindTagResponse) {
+    option (op_type) = {
+      op: ACCESSOR
+    };
+  }
+  rpc FindAllRemoteBranches(FindAllRemoteBranchesRequest) returns (stream FindAllRemoteBranchesResponse) {
+    option (op_type) = {
+      op: ACCESSOR
+    };
+  }
+  rpc RefExists(RefExistsRequest) returns (RefExistsResponse) {
+    option (op_type) = {
+      op: ACCESSOR
+    };
+  }
+
+  // FindBranch finds a branch by its unqualified name (like "master") and
+  // returns the commit it currently points to.
+  rpc FindBranch(FindBranchRequest) returns (FindBranchResponse) {
+    option (op_type) = {
+      op: ACCESSOR
+    };
+  }
+  rpc DeleteRefs(DeleteRefsRequest) returns (DeleteRefsResponse) {
+    option (op_type) = {
+      op: MUTATOR
+    };
+  }
+
+  rpc ListBranchNamesContainingCommit(ListBranchNamesContainingCommitRequest) returns (stream ListBranchNamesContainingCommitResponse) {
+    option (op_type) = {
+      op: ACCESSOR
+    };
+  }
+  rpc ListTagNamesContainingCommit(ListTagNamesContainingCommitRequest) returns (stream ListTagNamesContainingCommitResponse) {
+    option (op_type) = {
+      op: ACCESSOR
+    };
+  }
+
+  // GetTagSignatures returns signatures for annotated tags resolved from a set of revisions. Revisions
+  // which don't resolve to an annotated tag are silently discarded. Revisions which cannot be resolved
+  // result in an error. Tags which are annotated but not signed will return a TagSignature response
+  // which has no signature, but its unsigned contents will still be returned.
+  rpc GetTagSignatures(GetTagSignaturesRequest) returns (stream GetTagSignaturesResponse) {
+    option (op_type) = {
+      op: ACCESSOR
+    };
+  }
+
+  rpc GetTagMessages(GetTagMessagesRequest) returns (stream GetTagMessagesResponse) {
+    option (op_type) = {
+      op: ACCESSOR
+    };
+  }
+
+  // Returns commits that are only reachable from the ref passed
+  rpc ListNewCommits(ListNewCommitsRequest) returns (stream ListNewCommitsResponse) {
+    option (op_type) = {
+      op: ACCESSOR
+    };
+  }
+
+  rpc ListNewBlobs(ListNewBlobsRequest) returns (stream ListNewBlobsResponse) {
+    option (op_type) = {
+      op: ACCESSOR
+    };
+  }
+  rpc PackRefs(PackRefsRequest) returns (PackRefsResponse) {
+    option (op_type) = {
+      op: MUTATOR
+    };
+  }
+
+  // ListRefs returns a stream of all references in the repository. By default, pseudo-revisions like HEAD
+  // will not be returned by this RPC. Any symbolic references will be resolved to the object ID it is
+  // pointing at.
+  rpc ListRefs(ListRefsRequest) returns (stream ListRefsResponse) {
+    option (op_type) = {
+      op: ACCESSOR
+    };
+  }
+}
+
+message ListNewBlobsRequest {
+  Repository repository = 1 [(target_repository)=true];
+  string commit_id = 2;
+  // Limit the number of revs to be returned fro mgit-rev-list
+  // If the limit is set to zero, all items will be returned
+  uint32 limit = 3;
+}
+
+message ListNewBlobsResponse {
+  repeated NewBlobObject new_blob_objects = 1;
+}
+
+message FindDefaultBranchNameRequest {
+  Repository repository = 1 [(target_repository)=true];
+}
+
+message FindDefaultBranchNameResponse {
+  bytes name = 1;
+}
+
+message FindAllBranchNamesRequest {
+  Repository repository = 1 [(target_repository)=true];
+}
+
+message FindAllBranchNamesResponse {
+  repeated bytes names = 1;
+}
+
+message FindAllTagNamesRequest {
+  Repository repository = 1 [(target_repository)=true];
+}
+
+message FindAllTagNamesResponse {
+  repeated bytes names = 1;
+}
+
+message FindRefNameRequest {
+  Repository repository = 1 [(target_repository)=true];
+  // Require that the resulting ref contains this commit as an ancestor
+  string commit_id = 2;
+  // Example prefix: "refs/heads/". Type bytes because that is the type of ref names.
+  bytes prefix = 3;
+}
+
+message FindRefNameResponse {
+  // Example name: "refs/heads/master". Cannot assume UTF8, so the type is bytes.
+  bytes name = 1;
+}
+
+message FindLocalBranchesRequest {
+  Repository repository = 1 [(target_repository)=true];
+  enum SortBy {
+    NAME = 0;
+    UPDATED_ASC = 1;
+    UPDATED_DESC = 2;
+  }
+  SortBy sort_by = 2;
+  // The page token is the branch name, with the `refs/heads/` prefix, for
+  // example "refs/heads/master". After the first branch name is encountered
+  // which lexicographically exceeds the page token, it will be the first result
+  // send as part of the response.
+  PaginationParameter pagination_params = 3;
+}
+
+message FindLocalBranchesResponse {
+  repeated FindLocalBranchResponse branches = 1;
+}
+
+message FindLocalBranchResponse {
+  bytes name = 1;
+  string commit_id = 2;
+  bytes commit_subject = 3;
+  FindLocalBranchCommitAuthor commit_author = 4;
+  FindLocalBranchCommitAuthor commit_committer = 5;
+  GitCommit commit = 6;
+}
+
+message FindLocalBranchCommitAuthor {
+  bytes name = 1;
+  bytes email = 2;
+  google.protobuf.Timestamp date = 3;
+  bytes timezone = 4;
+}
+
+message FindAllBranchesRequest {
+  Repository repository = 1 [(target_repository)=true];
+  // Only return branches that are merged into root ref
+  bool merged_only = 2;
+  // If merged_only is true, this is a list of branches from which we
+  // return those merged into the root ref
+  repeated bytes merged_branches = 3;
+}
+
+message FindAllBranchesResponse {
+  message Branch {
+    bytes name = 1;
+    GitCommit target = 2;
+  }
+  repeated Branch branches = 1;
+}
+
+message FindTagRequest {
+  Repository repository = 1 [(target_repository)=true];
+  bytes tag_name = 2;
+}
+
+message FindTagResponse {
+  Tag tag = 1;
+}
+
+message FindAllTagsRequest {
+  Repository repository = 1 [(target_repository)=true];
+  // SortBy allows to specify desired order of the elements.
+  message SortBy {
+    // Key is a key used for sorting.
+    enum Key {
+      REFNAME     = 0;
+      CREATORDATE = 1;
+    }
+
+    Key           key       = 1;
+    SortDirection direction = 2;
+  }
+
+  // SortBy allows to request tags in particular order.
+  SortBy sort_by = 2;
+}
+
+message FindAllTagsResponse {
+  repeated Tag tags = 1;
+}
+
+message RefExistsRequest {
+  Repository repository = 1 [(target_repository)=true];
+  // Any ref, e.g. 'refs/heads/master' or 'refs/tags/v1.0.1'. Must start with 'refs/'.
+  bytes ref = 2;
+}
+
+message RefExistsResponse {
+  bool value = 1;
+}
+
+message CreateBranchRequest {
+  Repository repository = 1 [(target_repository)=true];
+  bytes name = 2;
+  bytes start_point = 3;
+}
+
+message CreateBranchResponse {
+  enum Status {
+    OK = 0;
+    ERR_EXISTS = 1;
+    ERR_INVALID = 2;
+    ERR_INVALID_START_POINT = 3;
+  }
+  Status status = 1;
+  Branch branch = 2;
+}
+
+message DeleteBranchRequest {
+  Repository repository = 1 [(target_repository)=true];
+  bytes name = 2;
+}
+
+// Not clear if we need to do status signaling; we can add fields later.
+message DeleteBranchResponse {}
+
+message FindBranchRequest {
+  // repository is the repository in which the branch should be looked up.
+  Repository repository = 1 [(target_repository)=true];
+  // name is the name of the branch which should be looked up. This must be the
+  // branch name only, it must not have the "refs/heads/" prefix.
+  bytes name = 2;
+}
+
+message FindBranchResponse {
+  Branch branch = 1;
+}
+
+message DeleteRefsRequest{
+  Repository repository = 1 [(target_repository)=true];
+  // The following two fields are mutually exclusive
+  repeated bytes except_with_prefix = 2;
+  repeated bytes refs = 3;
+}
+
+message DeleteRefsResponse {
+  string git_error = 1;
+}
+
+message ListBranchNamesContainingCommitRequest {
+  Repository repository = 1 [(target_repository)=true];
+  string commit_id = 2;
+
+  // Limit the number of tag names to be returned
+  // If the limit is set to zero, all items will be returned
+  uint32 limit = 3;
+}
+
+message ListBranchNamesContainingCommitResponse {
+  reserved 1;
+  repeated bytes branch_names = 2;
+}
+
+message ListTagNamesContainingCommitRequest {
+  Repository repository = 1 [(target_repository)=true];
+  string commit_id = 2;
+
+  // Limit the number of tag names to be returned
+  // If the limit is set to zero, all items will be returned
+  uint32 limit = 3;
+}
+
+message ListTagNamesContainingCommitResponse {
+  reserved 1;
+  repeated bytes tag_names = 2;
+}
+
+// GetTagSignaturesRequest is a request for the GetTagSignatures RPC.
+message GetTagSignaturesRequest {
+  // Repository is the repository in which tag signatures should be looked up.
+  Repository repository = 1 [(target_repository)=true];
+  // TagRevisions is the set of revisions which that should be looked up. Revisions
+  // supports the syntax as specified by gitrevisions(7). All revisions are expected
+  // to resolve to annotated tag objects. At least one revision must be provided.
+  repeated string tag_revisions = 2;
+}
+
+// GetTagSignaturesResponse is a response for a GetTagSignatures request. Each response
+// may contain multiple TagSignatures. In case TagSignatures don't fit into a single
+// response, signatures will be batched in multiple responses.
+message GetTagSignaturesResponse {
+  // TagSignature represents the signature of a signed tag.
+  message TagSignature {
+    // TagId is the resolved object ID of the tag.
+    string tag_id = 1;
+    // Signature contains the cryptographic signature of the tag. If the tag is not
+    // cryptographically signed, then the signature is unset.
+    bytes signature = 2;
+    // Content contains the contents which are signed by the signature. Contents
+    // include both the commit message, but also the commit metadata like author and
+    // subject.
+    bytes content = 3;
+  }
+
+  // Signatures is the set of signatures found.
+  repeated TagSignature signatures = 1;
+}
+
+message GetTagMessagesRequest {
+  reserved 2;
+  reserved "tag_names";
+
+  Repository repository = 1 [(target_repository)=true];
+  repeated string tag_ids = 3;
+}
+
+message GetTagMessagesResponse {
+  reserved 1;
+  reserved "tag_name";
+
+  bytes message = 2;
+  // Only present for a new tag message
+  string tag_id = 3;
+}
+
+message ListNewCommitsRequest {
+  Repository repository = 1 [(target_repository)=true];
+  string commit_id = 2;
+}
+
+message ListNewCommitsResponse {
+  repeated GitCommit commits = 1;
+}
+
+message FindAllRemoteBranchesRequest {
+  Repository repository = 1 [(target_repository)=true];
+  string remote_name = 2;
+}
+
+message FindAllRemoteBranchesResponse {
+  repeated Branch branches = 1;
+}
+
+message PackRefsRequest {
+  Repository repository = 1 [(target_repository)=true];
+  bool all_refs = 2;
+}
+
+message PackRefsResponse{}
+
+// ListRefsRequest is a request for the ListRefs RPC.
+message ListRefsRequest {
+  // Repository is the repository in which references should be listed in.
+  Repository repository = 1 [(target_repository)=true];
+  // Patterns contains all patterns which shall be listed. Patterns should be in the format
+  // accepted by git-for-each-ref(1). At least one pattern must be given, otherwise an error
+  // is returned. Patterns which don't match any reference will be silently ignored.
+  repeated bytes patterns = 2;
+  // Head determines whether the RPC should also return the HEAD reference. By default,
+  // pseudo-refs are not included in the response.
+  bool head = 3;
+}
+
+// ListRefsResponse is a response for the ListRefs RPC. The RPC can return multiple responses
+// in case there are more references than fit into a single gRPC message.
+message ListRefsResponse{
+  // Reference is a direct Git reference. No symbolic references will ever be returned by this RPC.
+  message Reference {
+    // Name is the fully qualified name of the reference.
+    bytes name = 1;
+    // Target is the object ID the reference points to.
+    string target = 2;
+  }
+
+  // References is the set of references returned by the RPC.
+  repeated Reference references = 1;
+}

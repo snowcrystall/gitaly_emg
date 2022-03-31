@@ -1,0 +1,26 @@
+# Top-level executables
+/gitaly
+/gitaly-backup
+/gitaly-blackbox
+/gitaly-debug
+/gitaly-git2go-v*
+/gitaly-hooks
+/gitaly-lfs-smudge
+/gitaly-ssh
+/gitaly-wrapper
+/praefect
+
+# Generic artifacts
+/_build/
+/*.deb
+
+# Ruby build artifacts
+/.ruby-bundle
+/ruby/vendor/bundle
+/ruby/.bundle
+/ruby/tmp
+/gitaly-*.gem
+
+# Configuration and runtime data
+/config.mak
+/*.toml

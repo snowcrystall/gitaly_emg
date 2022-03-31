@@ -1,0 +1,2 @@
+Dangerfile gitlab-language=ruby
+*.proto linguist-detectable=true

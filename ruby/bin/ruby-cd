@@ -1,0 +1,8 @@
+#!/usr/bin/env ruby
+
+# This script lets you run `bundle exec` in one directory, and then changes into another.
+
+warn "PID #{Process.pid} BUNDLE_GEMFILE=#{ENV['BUNDLE_GEMFILE']}"
+
+Dir.chdir(ARGV.shift)
+exec(*ARGV)

@@ -1,0 +1,73 @@
+listen_addr = ""
+tls_listen_addr = "0.0.0.0:2306"
+
+socket_path = ""
+prometheus_listen_addr = ""
+memory_queue_enabled = true
+graceful_stop_timeout = "30s"
+
+[replication]
+batch_size = 1
+
+[reconciliation]
+scheduling_interval = "1m"
+histogram_buckets = [1.0, 2.0, 3.0, 4.0, 5.0]
+
+[tls]
+certificate_path = '/home/git/cert.cert'
+key_path = '/home/git/key.pem'
+
+[logging]
+  format = "json"
+  level = "info"
+
+[sentry]
+  sentry_environment = "production"
+  sentry_dsn = "abcd123"
+
+[[virtual_storage]]
+name = "praefect"
+default_replication_factor = 2
+
+  [[virtual_storage.node]]
+    address = "tcp://gitaly-internal-1.example.com"
+    storage = "praefect-internal-1"
+
+  [[virtual_storage.node]]
+    address = "tcp://gitaly-internal-2.example.com"
+    storage = "praefect-internal-2"
+
+  [[virtual_storage.node]]
+    address = "tcp://gitaly-internal-3.example.com"
+    storage = "praefect-internal-3"
+
+[prometheus]
+scrape_timeout = "1s"
+grpc_latency_buckets = [0.1, 0.2, 0.3]
+
+[database]
+host = "1.2.3.4"
+port = 5432
+user = "praefect"
+password = "db-secret"
+dbname = "praefect_production"
+sslmode = "require"
+sslcert = "/path/to/cert"
+sslkey = "/path/to/key"
+sslrootcert = "/path/to/root-cert"
+
+[database.session_pooled]
+host = "2.3.4.5"
+port = 6432
+user = "praefect_sp"
+password = "db-secret-sp"
+dbname = "praefect_production_sp"
+sslmode = "prefer"
+sslcert = "/path/to/sp/cert"
+sslkey = "/path/to/sp/key"
+sslrootcert = "/path/to/sp/root-cert"
+
+[failover]
+error_threshold_window = "20s"
+write_error_threshold_count = 1500
+read_error_threshold_count = 100

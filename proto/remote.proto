@@ -1,0 +1,180 @@
+syntax = "proto3";
+
+package gitaly;
+
+option go_package = "gitlab.com/gitlab-org/gitaly/v14/proto/go/gitalypb";
+
+import "lint.proto";
+import "shared.proto";
+
+service RemoteService {
+    rpc AddRemote(AddRemoteRequest) returns (AddRemoteResponse) {
+      option (op_type) = {
+        op: MUTATOR
+      };
+    }
+    rpc FetchInternalRemote(FetchInternalRemoteRequest) returns (FetchInternalRemoteResponse) {
+      option (op_type) = {
+        op: MUTATOR
+      };
+    }
+    rpc RemoveRemote(RemoveRemoteRequest) returns (RemoveRemoteResponse) {
+      option (op_type) = {
+        op: MUTATOR
+      };
+    }
+
+    // UpdateRemoteMirror compares the references in the target repository and its remote mirror
+    // repository. Any differences in the references are then addressed by pushing the differing
+    // references to the mirror. Created and modified references are updated, removed references are
+    // deleted from the mirror. UpdateRemoteMirror updates all tags. Branches are updated if they match
+    // the patterns specified in the requests.
+    rpc UpdateRemoteMirror(stream UpdateRemoteMirrorRequest) returns (UpdateRemoteMirrorResponse) {
+      option (op_type) = {
+        op: ACCESSOR
+      };
+    }
+    rpc FindRemoteRepository(FindRemoteRepositoryRequest) returns (FindRemoteRepositoryResponse) {
+      option (op_type) = {
+        op: ACCESSOR
+        scope_level: STORAGE
+      };
+    }
+
+    // FindRemoteRootRef tries to find the root reference of a remote
+    // repository. The root reference is the default branch as pointed to by
+    // the remotes HEAD reference. Returns an InvalidArgument error if the
+    // specified remote does not exist and a NotFound error in case no HEAD
+    // branch was found.
+    rpc FindRemoteRootRef(FindRemoteRootRefRequest) returns (FindRemoteRootRefResponse) {
+      option (op_type) = {
+        op: ACCESSOR
+      };
+    }
+}
+
+message AddRemoteRequest {
+  Repository repository = 1 [(target_repository)=true];
+  string name = 2;
+  string url = 3;
+  // DEPRECATED: https://gitlab.com/gitlab-org/gitaly/proto/merge_requests/137
+  reserved 4;
+  reserved "mirror_refmap";
+  // If any, the remote is configured as a mirror with those mappings
+  repeated string mirror_refmaps = 5;
+}
+
+message AddRemoteResponse {}
+
+message RemoveRemoteRequest {
+  Repository repository = 1 [(target_repository)=true];
+  string name = 2;
+}
+
+message RemoveRemoteResponse {
+  bool result = 1;
+}
+
+message FetchInternalRemoteRequest {
+  Repository repository = 1 [(target_repository)=true];
+  Repository remote_repository = 2;
+}
+
+message FetchInternalRemoteResponse {
+  bool result = 1;
+}
+
+message UpdateRemoteMirrorRequest {
+  message Remote {
+    // URL is the URL of the remote repository.
+    string url = 1;
+    // HTTPAuthorizationHeader is an optional HTTP header used for
+    // authenticating against the remote repository.
+    string http_authorization_header = 2;
+  }
+
+  // Repository is the repository whose mirror repository to update.
+  Repository repository = 1 [(target_repository)=true];
+  // RefName is actually the remote to update. Deprecated in favor of the
+  // Remote field.
+  string ref_name = 2;
+  // Remote contains parameters required to connect to the remote repository.
+  // This allows Gitaly to use an in-memory remote and does not require any
+  // on-disk remote configuration.
+  Remote remote = 7;
+  // OnlyBranchesMatching contains patterns to match branches against. Only the
+  // matched brances are updated in the remote mirror. If no patterns are
+  // specified, all branches are updated. The patterns should only contain the
+  // branch name without the 'refs/heads/' prefix. "*" can be used as a
+  // wildcard to match anything. only_branches_matching can be streamed to the
+  // server over multiple messages. Optional.
+  repeated bytes only_branches_matching = 3;
+  // SshKey is the SSH key to use for accessing to the mirror repository.
+  // Optional.
+  string ssh_key = 4;
+  // KnownHosts specifies the identities used for strict host key checking.
+  // Optional.
+  string known_hosts = 5;
+  // KeepDivergentRefs specifies whether or not to update diverged references
+  // in the mirror repository.
+  bool keep_divergent_refs = 6;
+}
+
+message UpdateRemoteMirrorResponse {
+  // DivergentRefs contains a list of references that had diverged in the
+  // mirror from the source repository.
+  repeated bytes divergent_refs = 1;
+}
+
+message FindRemoteRepositoryRequest {
+  string remote = 1;
+  // This field is used to redirect request to proper storage where it can be handled.
+  // As of now it doesn't matter what storage will be used, but it still must be a valid.
+  // For more details: https://gitlab.com/gitlab-org/gitaly/-/issues/2442
+  string storage_name = 2 [(storage)=true];
+}
+
+// This migth throw a GRPC Unavailable code, to signal the request failure
+// is transient.
+message FindRemoteRepositoryResponse {
+  bool exists = 1;
+}
+
+// FindRemoteRootRefRequest represents a request for the FindRemoteRootRef RPC.
+message FindRemoteRootRefRequest {
+  // Repository is the repository in which the request shall be executed in. If
+  // a remote name is given, then this is the repository in which the remote
+  // will be looked up.
+  Repository repository = 1 [(target_repository)=true];
+  // Remote is the name of the remote of which the root reference shall be
+  // looked up. The remote must have been created before this call. This
+  // parameter is deprecated in favor of `RemoteUrl`, see
+  // https://gitlab.com/gitlab-org/gitaly/-/issues/1773.
+  string remote = 2 [deprecated=true];
+  // RemoteUrl specifies the remote repository URL which should be fetched from.
+  string remote_url = 3;
+  // HttpAuthorizationHeader is the HTTP header which should be added to the
+  // request in order to authenticate against the repository.
+  string http_authorization_header = 4;
+}
+
+// FindRemoteRootRefResponse represents the response for the FindRemoteRootRef
+// request.
+message FindRemoteRootRefResponse {
+  // Ref is the name of the remote root reference.
+  string ref = 1;
+}
+
+message ListRemotesRequest {
+   Repository repository = 1 [(target_repository)=true];
+}
+
+message ListRemotesResponse {
+  message Remote {
+    string name = 1;
+    string fetch_url = 2;
+    string push_url = 3;
+  }
+
+  repeated Remote remotes = 1;
+}

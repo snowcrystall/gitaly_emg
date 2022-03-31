@@ -1,0 +1,36 @@
+/*
+This file is a mock gRPC service used for validating the various types of
+gRPC methods that Praefect is expected to reverse proxy. It is intended to keep
+tests simple and keep Praefect decoupled from specific gRPC services.
+*/
+syntax = "proto3";
+
+package mock;
+
+option go_package = "gitlab.com/gitlab-org/gitaly/v14/internal/praefect/mock";
+
+import "shared.proto";
+import "lint.proto";
+import "google/protobuf/empty.proto";
+
+message RepoRequest {
+	gitaly.Repository repo = 1 [(gitaly.target_repository)=true];
+}
+
+service SimpleService {
+  // RepoAccessorUnary is a unary RPC that accesses a repo
+  rpc RepoAccessorUnary(RepoRequest) returns (google.protobuf.Empty) {
+    option (gitaly.op_type) = {
+      op: ACCESSOR
+      scope_level: REPOSITORY
+    };
+  }
+
+  // RepoMutatorUnary is a unary RPC that mutates a repo
+  rpc RepoMutatorUnary(RepoRequest) returns (google.protobuf.Empty) {
+    option (gitaly.op_type) = {
+      op: MUTATOR
+      scope_level: REPOSITORY
+    };
+  }
+}

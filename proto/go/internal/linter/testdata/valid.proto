@@ -1,0 +1,110 @@
+syntax = "proto3";
+
+package test;
+
+option go_package = "gitlab.com/gitlab-org/gitaly/v14/proto/go/internal/linter/testdata";
+
+import "lint.proto";
+import "shared.proto";
+
+message ValidRequest {
+  gitaly.Repository destination = 1 [(gitaly.target_repository)=true];
+}
+
+message ValidRequestWithoutRepo {
+}
+
+message ValidStorageRequest {
+  string storage_name = 1 [(gitaly.storage)=true];
+}
+
+message ValidResponse{}
+
+message ValidNestedRequest{
+  ValidRequest inner_message = 1;
+}
+
+message ValidStorageNestedRequest{
+  ValidStorageRequest inner_message = 1;
+}
+
+message ValidNestedSharedRequest {
+  gitaly.ObjectPool nested_target_repo = 1 [(gitaly.target_repository)=true];
+}
+
+message ValidInnerNestedRequest {
+  message Header {
+    gitaly.Repository destination = 1 [(gitaly.target_repository)=true];
+  }
+
+  Header header = 1;
+}
+
+message ValidStorageInnerNestedRequest {
+  message Header {
+    string storage_name = 1 [(gitaly.storage) = true];
+  }
+
+  Header header = 1;
+}
+
+service InterceptedService {
+  // intercepted services do not need method operation and scope
+  // annotations.
+  option (gitaly.intercepted) = true;
+
+  rpc TestMethod(ValidRequest) returns (ValidResponse);
+}
+
+service ValidService {
+  rpc TestMethod(ValidRequest) returns (ValidResponse) {
+    option (gitaly.op_type) = {
+      op: ACCESSOR
+    };
+  }
+
+  rpc TestMethod2(ValidRequest) returns (ValidResponse) {
+    option (gitaly.op_type) = {
+      op: MUTATOR
+    };
+  }
+
+  rpc TestMethod3(ValidRequest) returns (ValidResponse) {
+    option (gitaly.op_type) = {
+      op: MUTATOR
+      scope_level: REPOSITORY // repo can be explicitly included
+    };
+  }
+
+  rpc TestMethod5(ValidNestedRequest) returns (ValidResponse) {
+    option (gitaly.op_type) = {
+      op: MUTATOR
+    };
+  }
+
+  rpc TestMethod6(ValidNestedSharedRequest) returns (ValidResponse) {
+    option (gitaly.op_type) = {
+      op: MUTATOR
+    };
+  }
+
+  rpc TestMethod7(ValidInnerNestedRequest) returns (ValidResponse) {
+    option (gitaly.op_type) = {
+      op: MUTATOR
+    };
+  }
+
+  rpc TestMethod8(ValidStorageRequest) returns (ValidResponse) {
+    option (gitaly.op_type) = {
+      op: MUTATOR
+      scope_level: STORAGE
+    };
+  }
+
+  rpc TestMethod9(ValidStorageNestedRequest) returns (ValidResponse) {
+    option (gitaly.op_type) = {
+      op: MUTATOR
+      scope_level: STORAGE
+    };
+  }
+}

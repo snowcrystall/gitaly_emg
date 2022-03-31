@@ -1,0 +1,112 @@
+syntax = "proto3";
+
+package gitaly;
+
+option go_package = "gitlab.com/gitlab-org/gitaly/v14/proto/go/gitalypb";
+
+import "lint.proto";
+import "shared.proto";
+
+service HookService {
+  rpc PreReceiveHook(stream PreReceiveHookRequest) returns (stream PreReceiveHookResponse) {
+    option (op_type) = {
+      op: ACCESSOR
+    };
+  }
+  rpc PostReceiveHook(stream PostReceiveHookRequest) returns  (stream PostReceiveHookResponse) {
+    option (op_type) = {
+      op: ACCESSOR
+    };
+  }
+  rpc UpdateHook(UpdateHookRequest) returns (stream UpdateHookResponse) {
+    option (op_type) = {
+      op: ACCESSOR
+    };
+  }
+  rpc ReferenceTransactionHook(stream ReferenceTransactionHookRequest) returns (stream ReferenceTransactionHookResponse) {
+    option (op_type) = {
+      op: ACCESSOR
+    };
+  }
+  // PackObjectsHook is meant to be called by git-upload-pack via the
+  // uploadpack.packObjectsHook mechanism. It generates a stream of packed
+  // Git objects.
+  rpc PackObjectsHook(stream PackObjectsHookRequest) returns (stream PackObjectsHookResponse) {
+    option (op_type) = {
+      op: ACCESSOR
+    };
+  }
+}
+
+message PreReceiveHookRequest {
+  Repository repository = 1 [(target_repository)=true];
+  repeated string environment_variables = 2;
+  bytes stdin = 4;
+  repeated string git_push_options = 5;
+}
+
+message PreReceiveHookResponse{
+  bytes stdout = 1;
+  bytes stderr = 2;
+  ExitStatus exit_status = 3;
+}
+
+message PostReceiveHookRequest {
+  Repository repository = 1 [(target_repository)=true];
+  repeated string environment_variables = 2;
+  bytes stdin = 3;
+  repeated string git_push_options = 4;
+}
+
+message PostReceiveHookResponse{
+  bytes stdout = 1;
+  bytes stderr = 2;
+  ExitStatus exit_status = 3;
+}
+
+message UpdateHookRequest {
+  Repository repository = 1 [(target_repository)=true];
+  repeated string environment_variables = 2;
+  bytes ref = 3;
+  string old_value = 4;
+  string new_value = 5;
+}
+
+message UpdateHookResponse{
+  bytes stdout = 1;
+  bytes stderr = 2;
+  ExitStatus exit_status = 3;
+}
+
+message ReferenceTransactionHookRequest {
+  Repository repository = 1 [(target_repository)=true];
+  repeated string environment_variables = 2;
+  bytes stdin = 3;
+  enum State {
+    PREPARED = 0;
+    COMMITTED = 1;
+    ABORTED = 2;
+  }
+  State state = 4;
+}
+
+message ReferenceTransactionHookResponse {
+  bytes stdout = 1;
+  bytes stderr = 2;
+  ExitStatus exit_status = 3;
+}
+
+message PackObjectsHookRequest {
+  Repository repository = 1 [(target_repository)=true];
+  // args contains the arguments passed to the pack-objects hook, without the leading "git"
+  repeated string args = 2;
+  // stdin is meant for consumption by git-pack-objects
+  bytes stdin = 3;
+}
+
+message PackObjectsHookResponse {
+  // stdout contains packfile data
+  bytes stdout = 1;
+  // stderr contains progress messages (such as "Enumerating objects ...")
+  bytes stderr = 2;
+}

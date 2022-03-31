@@ -1,0 +1,261 @@
+syntax = "proto3";
+
+package gitaly;
+
+option go_package = "gitlab.com/gitlab-org/gitaly/v14/proto/go/gitalypb";
+
+import "lint.proto";
+import "shared.proto";
+
+service BlobService {
+  // GetBlob returns the contents of a blob object referenced by its object
+  // ID. We use a stream to return a chunked arbitrarily large binary
+  // response
+  rpc GetBlob(GetBlobRequest) returns (stream GetBlobResponse) {
+    option (op_type) = {
+      op: ACCESSOR
+    };
+  }
+  rpc GetBlobs(GetBlobsRequest) returns (stream GetBlobsResponse) {
+    option (op_type) = {
+      op: ACCESSOR
+    };
+  }
+
+  // ListBlobs will list all blobs reachable from a given set of revisions by
+  // doing a graph walk. It is not valid to pass revisions which do not resolve
+  // to an existing object.
+  rpc ListBlobs(ListBlobsRequest) returns (stream ListBlobsResponse) {
+    option (op_type) = {
+      op: ACCESSOR
+    };
+  }
+
+  // ListAllBlobs retrieves all blobs pointers in the repository, including
+  // those not reachable by any reference.
+  rpc ListAllBlobs(ListAllBlobsRequest) returns (stream ListAllBlobsResponse) {
+    option (op_type) = {
+      op: ACCESSOR
+    };
+  }
+
+  // GetLFSPointers retrieves LFS pointers from a given set of object IDs.
+  // This RPC filters all requested objects and only returns those which refer
+  // to a valid LFS pointer.
+  rpc GetLFSPointers(GetLFSPointersRequest) returns (stream GetLFSPointersResponse) {
+    option (op_type) = {
+      op: ACCESSOR
+    };
+  }
+
+  // ListLFSPointers retrieves LFS pointers reachable from a given set of
+  // revisions by doing a graph walk. This includes both normal revisions like
+  // an object ID or branch, but also the pseudo-revisions "--all" and "--not"
+  // as documented in git-rev-parse(1). Revisions which don't directly or
+  // transitively reference any LFS pointers are ignored. It is not valid to
+  // pass revisions which do not resolve to an existing object.
+  rpc ListLFSPointers(ListLFSPointersRequest) returns (stream ListLFSPointersResponse) {
+    option (op_type) = {
+      op: ACCESSOR
+    };
+  }
+
+  // ListAllLFSPointers retrieves all LFS pointers in the repository, including
+  // those not reachable by any reference.
+  rpc ListAllLFSPointers(ListAllLFSPointersRequest) returns (stream ListAllLFSPointersResponse) {
+    option (op_type) = {
+      op: ACCESSOR
+    };
+  }
+
+}
+
+message GetBlobRequest {
+
+  Repository repository = 1[(target_repository)=true];
+  // Object ID (SHA1) of the blob we want to get
+  string oid = 2;
+  // Maximum number of bytes we want to receive. Use '-1' to get the full blob no matter how big.
+  int64 limit = 3;
+}
+
+message GetBlobResponse {
+  // Blob size; present only in first response message
+  int64 size = 1;
+  // Chunk of blob data
+  bytes data = 2;
+  // Object ID of the actual blob returned. Empty if no blob was found.
+  string oid = 3;
+}
+
+message GetBlobsRequest {
+
+  message RevisionPath {
+    string revision = 1;
+    bytes path = 2;
+  }
+
+  Repository repository = 1[(target_repository)=true];
+  // Revision/Path pairs of the blobs we want to get.
+  repeated RevisionPath revision_paths = 2;
+  // Maximum number of bytes we want to receive. Use '-1' to get the full blobs no matter how big.
+  int64 limit = 3;
+}
+
+message GetBlobsResponse {
+  // Blob size; present only on the first message per blob
+  int64 size = 1;
+  // Chunk of blob data, could span over multiple messages.
+  bytes data = 2;
+  // Object ID of the current blob. Only present on the first message per blob. Empty if no blob was found.
+  string oid = 3;
+  bool is_submodule = 4;
+  int32 mode = 5;
+  string revision = 6;
+  bytes path = 7;
+  ObjectType type = 8;
+}
+
+// ListBlobsRequest is a request for the ListBlobs RPC.
+message ListBlobsRequest {
+  // Repository is the repository in which blobs should be enumerated.
+  Repository repository = 1 [(target_repository)=true];
+  // Revisions is the list of revisions to retrieve blobs from. These revisions
+  // will be walked. Supports pseudo-revisions `--all` and `--not` as well as
+  // negated revisions via `^revision`. Revisions cannot start with a leading
+  // dash. Please consult gitrevisions(7) for more info. Must not be empty.
+  repeated string revisions = 2;
+  // Limit is the maximum number of blobs to return. If set to its default
+  // (`0`), then all found blobs wll be returned.
+  uint32 limit = 3;
+  // BytesLimit is the maximum number of bytes to receive for each blob. If set
+  // to `0`, then no blob data will be sent. If `-1`, then all blob data will
+  // be sent without any limits.
+  int64 bytes_limit = 4;
+}
+
+// ListBlobsResponse is a response for the ListBlobs RPC.
+message ListBlobsResponse {
+  // Blob represents a Git blob object.
+  message Blob {
+    // Oid is the object ID of the blob. Will only be set for the first
+    // message of each specific blob.
+    string oid = 1;
+    // Size is the size of the blob. Will only be set for the first message
+    // of each specific blob.
+    int64 size = 2;
+    // Data is the contents of the blob. This field is optional and depends on
+    // the BytesLimit in the original request.
+    bytes data = 3;
+  }
+
+  // Blobs is the blobs which have been found. In case blob contents were
+  // requested and contents of a blob exceed the maximum gRPC message size,
+  // then this blob will be split up into multiple blob messages which span
+  // across multiple responses. In that case, metadata of the blob will only be
+  // sent on the first such message for this specific blob.
+  repeated Blob blobs = 1;
+}
+
+// ListAllBlobsRequest is a request for the ListAllBlobs RPC.
+message ListAllBlobsRequest {
+  // Repository is the repository in which blobs should be enumerated.
+  Repository repository = 1 [(target_repository)=true];
+  // Limit is the maximum number of blobs to return. If set to its default
+  // (`0`), then all found blobs wll be returned.
+  uint32 limit = 2;
+  // BytesLimit is the maximum number of bytes to receive for each blob. If set
+  // to `0`, then no blob data will be sent. If `-1`, then all blob data will
+  // be sent without any limits.
+  int64 bytes_limit = 3;
+}
+
+// ListAllBlobsResponse is a response for the ListAllBlobs RPC.
+message ListAllBlobsResponse {
+  // Blob represents a Git blob object.
+  message Blob {
+    // Oid is the object ID of the blob. Will only be set for the first
+    // message of each specific blob.
+    string oid = 1;
+    // Size is the size of the blob. Will only be set for the first message
+    // of each specific blob.
+    int64 size = 2;
+    // Data is the contents of the blob. This field is optional and depends on
+    // the BytesLimit in the original request.
+    bytes data = 3;
+  }
+
+  // Blobs is the blobs which have been found. In case blob contents were
+  // requested and contents of a blob exceed the maximum gRPC message size,
+  // then this blob will be split up into multiple blob messages which span
+  // across multiple responses. In that case, metadata of the blob will only be
+  // sent on the first such message for this specific blob.
+  repeated Blob blobs = 1;
+}
+
+// LFSPointer is a git blob which points to an LFS object.
+message LFSPointer {
+  // Size is the size of the blob. This is not the size of the LFS object
+  // pointed to.
+  int64 size = 1;
+  // Data is the bare data of the LFS pointer blob. It contains the pointer to
+  // the LFS data in the format specified by the LFS project.
+  bytes data = 2;
+  // Oid is the object ID of the blob.
+  string oid = 3;
+}
+
+message NewBlobObject {
+  int64 size = 1;
+  string oid = 2;
+  bytes path = 3;
+}
+
+// GetLFSPointersRequest is a request for the GetLFSPointers RPC.
+message GetLFSPointersRequest {
+  // Repository is the repository for which LFS pointers should be retrieved
+  // from.
+  Repository repository = 1[(target_repository)=true];
+  // BlobIds is the list of blobs to retrieve LFS pointers from. Must be a
+  // non-empty list of blobs IDs to fetch.
+  repeated string blob_ids = 2;
+}
+
+// GetLFSPointersResponse is a response for the GetLFSPointers RPC.
+message GetLFSPointersResponse {
+  // LfsPointers is the list of LFS pointers which were requested.
+  repeated LFSPointer lfs_pointers = 1;
+}
+
+// ListLFSPointersRequest is a request for the ListLFSPointers RPC.
+message ListLFSPointersRequest {
+  // Repository is the repository for which LFS pointers should be retrieved
+  // from.
+  Repository repository = 1[(target_repository)=true];
+  // Revisions is the list of revisions to retrieve LFS pointers from. Must be
+  // a non-empty list.
+  repeated string revisions = 2;
+  // Limit limits the number of LFS pointers returned.
+  int32 limit = 3;
+}
+
+// ListLFSPointersResponse is a response for the ListLFSPointers RPC.
+message ListLFSPointersResponse {
+  // LfsPointers is the list of LFS pointers which were requested.
+  repeated LFSPointer lfs_pointers = 1;
+}
+
+// ListAllLFSPointersRequest is a request for the ListAllLFSPointers RPC.
+message ListAllLFSPointersRequest {
+  // Repository is the repository for which LFS pointers should be retrieved
+  // from.
+  Repository repository = 1[(target_repository)=true];
+  // Limit limits the number of LFS pointers returned.
+  int32 limit = 3;
+}
+
+// ListAllLFSPointersResponse is a response for the ListAllLFSPointers RPC.
+message ListAllLFSPointersResponse {
+  // LfsPointers is the list of LFS pointers which were requested.
+  repeated LFSPointer lfs_pointers = 1;
+}

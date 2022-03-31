@@ -1,0 +1,18 @@
+---
+engines:
+  govet:
+    enabled: true
+  golint:
+    enabled: true
+  gofmt:
+    enabled: true
+  rubocop-gitlab:
+    enabled: true
+ratings:
+  paths:
+  - "**.go"
+  - "**.rb"
+exclude_paths:
+- vendor/
+- _build/
+- ruby/vendor/

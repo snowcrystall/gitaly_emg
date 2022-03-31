@@ -1,0 +1,159 @@
+syntax = "proto3";
+
+package test;
+
+option go_package = "gitlab.com/gitlab-org/gitaly/v14/proto/go/internal/linter/testdata";
+
+import "lint.proto";
+import "shared.proto";
+
+message InvalidMethodRequest {}
+
+message InvalidMethodRequestWithRepo {
+  gitaly.Repository destination = 1 [(gitaly.target_repository)=true];
+}
+
+message InvalidTargetType {
+  int32 wrong_type = 1 [(gitaly.target_repository)=true];
+}
+
+message InvalidMethodResponse{}
+
+message InvalidNestedRequest{
+  InvalidTargetType inner_message = 1;
+}
+
+message RequestWithStorage {
+  string storage_name = 1 [(gitaly.storage)=true];
+  gitaly.Repository destination = 2;
+}
+
+message RequestWithStorageAndRepo {
+  string storage_name = 1 [(gitaly.storage)=true];
+  gitaly.Repository destination = 2 [(gitaly.target_repository)=true];
+}
+
+message RequestWithNestedStorageAndRepo{
+  RequestWithStorageAndRepo inner_message = 1;
+}
+
+message RequestWithMultipleNestedStorage{
+  RequestWithStorage inner_message = 1;
+  string storage_name = 2 [(gitaly.storage)=true];
+}
+
+message RequestWithInnerNestedStorage {
+  message Header {
+    string storage_name = 1 [(gitaly.storage) = true];
+  }
+
+  Header header = 1;
+}
+
+message RequestWithWrongTypeRepository {
+  message Header {
+    InvalidMethodResponse repository = 1 [(gitaly.repository) = true];
+  }
+
+  Header header = 1 [(gitaly.target_repository) = true];
+}
+
+message RequestWithNestedRepoNotFlagged {
+  message Header {
+    gitaly.Repository repository = 1;
+  }
+
+  Header header = 1 [(gitaly.target_repository) = true];
+}
+
+service InterceptedWithOperationType {
+  option (gitaly.intercepted) = true;
+
+  // intercepted services can't have operation type annotations.
+  rpc InvalidMethod(InvalidMethodRequest) returns (InvalidMethodResponse) {
+    option (gitaly.op_type) = {
+      op: ACCESSOR
+    };
+  }
+}
+
+service InvalidService {
+  // should fail if op_type extension is missing
+  rpc InvalidMethod0(InvalidMethodRequest) returns (InvalidMethodResponse) {}
+
+  // should fail if op type is unknown
+  rpc InvalidMethod1(InvalidMethodRequest) returns (InvalidMethodResponse) {
+    option (gitaly.op_type).op = UNKNOWN;
+  }
+  // should fail if target repo is not provided for accessor
+  rpc InvalidMethod2(InvalidMethodRequest) returns (InvalidMethodResponse) {
+    option (gitaly.op_type) = {
+      op: ACCESSOR
+    };
+  }
+  // should fail if missing either target repo or non-repo-scope for mutator
+  rpc InvalidMethod4(InvalidMethodRequest) returns (InvalidMethodResponse) {
+    option (gitaly.op_type).op = MUTATOR;
+  }
+
+  // should fail if repository is not of type Repository
+  rpc InvalidMethod5(RequestWithWrongTypeRepository) returns (InvalidMethodResponse) {
+    option (gitaly.op_type).op = MUTATOR;
+  }
+
+  // should fail if nested repository isn't flagged
+  rpc InvalidMethod6(RequestWithNestedRepoNotFlagged) returns (InvalidMethodResponse) {
+    option (gitaly.op_type).op = MUTATOR;
+  }
+  // should fail if target field type is not of type Repository
+  rpc InvalidMethod7(InvalidTargetType) returns (InvalidMethodResponse) {
+    option (gitaly.op_type) = {
+      op: MUTATOR
+    };
+  }
+
+  // should fail if nested target field type is not of type Repository
+  rpc InvalidMethod8(InvalidNestedRequest) returns (InvalidMethodResponse) {
+    option (gitaly.op_type) = {
+      op: MUTATOR
+    };
+  }
+  // should fail if target repo is specified for storage scoped RPC
+  rpc InvalidMethod9(InvalidMethodRequestWithRepo) returns (InvalidMethodResponse) {
+    option (gitaly.op_type) = {
+      op: MUTATOR
+      scope_level: STORAGE
+    };
+  }
+
+  // should fail if storage is specified for implicit repository scoped RPC
+  rpc InvalidMethod10(RequestWithStorageAndRepo) returns (InvalidMethodResponse) {
+    option (gitaly.op_type) = {
+      op: ACCESSOR
+    };
+  }
+
+  // should fail if storage is specified for repository scoped RPC
+  rpc InvalidMethod11(RequestWithNestedStorageAndRepo) returns (InvalidMethodResponse) {
+    option (gitaly.op_type) = {
+      op: MUTATOR
+      scope_level: REPOSITORY
+    };
+  }
+
+  // should fail if storage isn't specified for storage scoped RPC
+  rpc InvalidMethod13(InvalidTargetType) returns (InvalidMethodResponse) {
+    option (gitaly.op_type) = {
+      op: MUTATOR
+      scope_level: STORAGE
+    };
+  }
+
+  // should fail if multiple storage is specified for storage scoped RPC
+  rpc InvalidMethod14(RequestWithMultipleNestedStorage) returns (InvalidMethodResponse) {
+    option (gitaly.op_type) = {
+      op: MUTATOR
+      scope_level: STORAGE
+    };
+  }
+}
